@@ -142,27 +142,16 @@ containing a value of this type.
         public static final int ic_launcher=0x7f020000;
     }
     public static final class id {
-        public static final int accelDataContainer=0x7f04000d;
-        public static final int action_settings=0x7f040010;
-        public static final int deviceOrientationView=0x7f040008;
+        public static final int action_settings=0x7f040006;
         public static final int hybrid=0x7f040004;
-        public static final int latitudeView=0x7f04000b;
-        public static final int locationDataContainer=0x7f040009;
-        public static final int longLatContainer=0x7f04000a;
-        public static final int longitudeView=0x7f04000c;
         public static final int map=0x7f040005;
         public static final int none=0x7f040000;
         public static final int normal=0x7f040001;
         public static final int satellite=0x7f040002;
         public static final int terrain=0x7f040003;
-        public static final int userActivityView=0x7f040006;
-        public static final int userLocationView=0x7f040007;
-        public static final int xyzLabelView=0x7f04000e;
-        public static final int xyzView=0x7f04000f;
     }
     public static final class layout {
         public static final int activity_main=0x7f030000;
-        public static final int info_window=0x7f030001;
     }
     public static final class menu {
         public static final int main=0x7f080000;

@@ -1,43 +1,84 @@
 package com.example.assignment2;
 
-import android.app.Activity;
-import android.database.sqlite.SQLiteDatabase;
-import android.util.Log;
+import android.content.Context;
+import android.graphics.Color;
 import android.view.View;
 import android.widget.LinearLayout;
+import android.widget.LinearLayout.LayoutParams;
 import android.widget.TextView;
-
 import com.google.android.gms.maps.GoogleMap.InfoWindowAdapter;
 import com.google.android.gms.maps.model.Marker;
 
-public class InfoWindow extends Activity implements InfoWindowAdapter {
+public class InfoWindow implements InfoWindowAdapter {
 	
 	private LinearLayout locationDataContainer, longLatContainer, accelDataContainer, infoWindowLayout;
 	private TextView userActivityView, userLocationView, deviceOrientationView;
 	private TextView latitudeView, longitudeView, xyzLabelView, xyzView;
-	private String db_path = "/data/data/com.example.assignment2/databases/UserLocation.db";
-	private SQLiteDB dbHandler;
+	private LayoutParams infoWindowLayoutParams;
+	private DatabaseHandler dbHandler;
+	private Context applicationContext;
 	
-	public InfoWindow () {
-		/*
-		this.setContentView(R.layout.info_window);
-		userActivityView = (TextView) findViewById(R.id.userActivityView);
-		userLocationView = (TextView) findViewById(R.id.userLocationView);
-		deviceOrientationView = (TextView) findViewById(R.id.deviceOrientationView);
-		latitudeView = (TextView) findViewById(R.id.latitudeView);
-		longitudeView = (TextView) findViewById(R.id.longitudeView);
-		xyzLabelView = (TextView) findViewById(R.id.xyzLabelView);
-		xyzView = (TextView) findViewById(R.id.xyzView);
-		longLatContainer = (LinearLayout) findViewById(R.id.longLatContainer);
-		accelDataContainer = (LinearLayout) findViewById(R.id.accelDataContainer);
-		infoWindowLayout = (LinearLayout) findViewById(R.layout.info_window);
-		*/
+	public InfoWindow (Context applicationContext_) {
+		// Take in the global application context
+		applicationContext = applicationContext_;
+		
+		// Set database handler
+		dbHandler = new DatabaseHandler(applicationContext);
+		
+		// Initialize views to be used for the custom info window adapter
+		userActivityView = new TextView(applicationContext);
+		userLocationView = new TextView(applicationContext);
+		deviceOrientationView = new TextView(applicationContext);
+		longLatContainer = new LinearLayout(applicationContext);
+		accelDataContainer = new LinearLayout(applicationContext);
+		
+		latitudeView = new TextView(applicationContext);
+		longitudeView = new TextView(applicationContext);
+		xyzLabelView = new TextView(applicationContext);
+		xyzLabelView.setText("Accelerometer Data:");
+		xyzView = new TextView(applicationContext);
+		
+		longLatContainer.setOrientation(LinearLayout.VERTICAL);
+		longLatContainer.addView(latitudeView);
+		longLatContainer.addView(longitudeView);
+		
+		accelDataContainer.setOrientation(LinearLayout.VERTICAL);
+		accelDataContainer.addView(xyzLabelView);
+		accelDataContainer.addView(xyzView);
+		
+		locationDataContainer = new LinearLayout(applicationContext);
+		locationDataContainer.setOrientation(LinearLayout.HORIZONTAL);
+		locationDataContainer.addView(longLatContainer);
+		locationDataContainer.addView(accelDataContainer);
+		
+		infoWindowLayout = new LinearLayout(applicationContext);
+		infoWindowLayout.addView(userActivityView);
+		infoWindowLayout.addView(userLocationView);
+		infoWindowLayout.addView(deviceOrientationView);
+		infoWindowLayout.addView(locationDataContainer);
+		
+		infoWindowLayoutParams = new LayoutParams(100, 100);
+		infoWindowLayout.setLayoutParams(infoWindowLayoutParams);
+		infoWindowLayout.setOrientation(LinearLayout.VERTICAL);
+		infoWindowLayout.setBackgroundColor(Color.WHITE);
 	}
-
-	public void setDatabaseHandler () {
-		dbHandler = new SQLiteDB(InfoWindow.this.getApplicationContext(), db_path, null, 3, null);
-		SQLiteDatabase db = dbHandler.getWritableDatabase();
-		Log.i("MyApp","Database Handler: " + db.toString());
+	
+	// Populates the info window with user location data
+	public void populateInfoWindow (int primaryKey) {		
+		UserLocationData markerData = dbHandler.getEntry(primaryKey);
+		userActivityView.setText("Activity: " + markerData.getActivity());
+		userLocationView.setText("Location: " + markerData.getAddress());
+		String orientation = "";
+		if (markerData.getOrientation() == 1) {
+			orientation = "Portrait";
+		}
+		else if (markerData.getOrientation() == 2) {
+			orientation = "Landscape";
+		}
+		deviceOrientationView.setText("Device Orientation: " + orientation);
+		latitudeView.setText("Latitude: " + String.valueOf(markerData.getLat()));
+		longitudeView.setText("Longitude: " + String.valueOf(markerData.getLong()));
+		xyzView.setText("<X: " + markerData.getAccelX() + ", Y: " + markerData.getAccelY() + ", Z: " + markerData.getAccelZ() + ">");
 	}
 	
 	@Override
@@ -46,21 +87,11 @@ public class InfoWindow extends Activity implements InfoWindowAdapter {
 		return null;
 	}
 
-	/*
-	public void setInfoWindow (double latitude_, double longitude_, float x_, float y_, float z_) {
-		// TODO Auto-generated method stub
-		userActivityView.setText("Grabbing coffee w/ Chad");
-		userLocationView.setText("Location: " + "foo");
-		deviceOrientationView.setText("Dvice Orientation: " + "bar");
-		latitudeView.setText(Double.toString(latitude_));
-		longitudeView.setText(Double.toString(longitude_));
-		xyzView.setText("< X: " + Float.toString(x_) + ", Y: " + Float.toString(y_) + ", Z: " + Float.toHexString(z_));
-	}
-	*/
-
+	// Returns a custom info window that will display on the map when a marker is touched
 	@Override
 	public View getInfoWindow(Marker arg0) {
-		return null;
+		int id = Integer.valueOf(arg0.getTitle());
+		populateInfoWindow(id);
+		return infoWindowLayout;
 	}
-
 }

@@ -1,29 +1,33 @@
 package com.example.assignment2;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.GoogleMap.InfoWindowAdapter;
 import com.google.android.gms.maps.MapFragment;
 import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.location.Address;
 import android.location.Criteria;
+import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.ContentValues;
 import android.content.Context;
-import android.util.Log;
+import android.content.DialogInterface;
+import android.database.sqlite.SQLiteDatabase;
 import android.view.Menu;
-import android.view.View;
-import android.widget.LinearLayout;
-import android.widget.TextView;
+import android.widget.EditText;
+
 
 public class MainActivity extends Activity implements SensorEventListener, LocationListener {
 
@@ -33,39 +37,55 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 	private Sensor accelerometer;
 	private LocationManager locationManager;
 	private Handler locationHandler = new Handler();
-	private LatLng latLong;
-	private double latitude = 0; 
-	private double longitude = 0;
-	private float x, y, z;
+	private float accelX, accelY, accelZ;
 	private String bestProvider;
 	private Criteria providerCriteria;
-	private Location initialLocation;
-	private Marker initialMarker;
-	//private LinearLayout locationDataContainer, longLatContainer, accelDataContainer, infoWindowLayout;
-	//private TextView userActivityView, userLocationView, deviceOrientationView;
-	//private TextView latitudeView, longitudeView, xyzLabelView, xyzView;
 	private InfoWindow customInfoWindow;
+	private Geocoder geocoder;
+	private List<Address> addresses;
+	private DatabaseHandler dbHandler;
+	private List<UserLocationData> markerList;
+	private SQLiteDatabase db;
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+		
 		setContentView(R.layout.activity_main);
 		
-		Log.i("MyApp", "Files Path: " + this.getFilesDir().getAbsolutePath());
-		
+		// Instantiate GoogleMap object
 		map = ((MapFragment)getFragmentManager().findFragmentById(R.id.map)).getMap();
+		
 		// Set the map's custom info window adapter
-		customInfoWindow = new InfoWindow();
+		customInfoWindow = new InfoWindow(MainActivity.this);
 		map.setInfoWindowAdapter(customInfoWindow);
 		
+		// Set up database handler and database object
+		dbHandler = new DatabaseHandler(this);
+		db = dbHandler.getWritableDatabase();		
+		
+		// Retrieve all markers currently in the database on app creation
+		markerList = dbHandler.getAllEntries();
+		
+		// Iterate through all markers and add them to the map
+		for (int i = 0; i < markerList.size(); i++) {
+			map.addMarker(new MarkerOptions ().position(
+					new LatLng(markerList.get(i).getLat(), markerList.get(i).getLat()))
+						.title(String.valueOf(markerList.get(i).getID())));
+		}
+		
+		// Instantiate sensor manager object to access sensor services on an Android device
 		sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+		
+		// Retrieve the accelerometer object if it exists
 		if (sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null) {
 			List<Sensor> mySensors = sensorManager.getSensorList(Sensor.TYPE_ACCELEROMETER);
 			for (int i = 0; i < mySensors.size(); i++) {
 				accelerometer = mySensors.get(i);
 			}
 		}
-
+		
+		// Instantiate a location manager object that will be used for getting latitude and longitude values
 		locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 		
 		// Instantiate Criteria object to pass the type of desired accuracy expected from the location provider
@@ -77,47 +97,15 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 		bestProvider = locationManager.getBestProvider(providerCriteria, true);
 		
 		// Register for location updates
-		locationManager.requestLocationUpdates(bestProvider, 10, 0, MainActivity.this);
+		// Set the callback to fire when at least 1 minute has elapsed and 100 meters have been traveled
+		locationManager.requestLocationUpdates(bestProvider, 60000, 100, MainActivity.this);
 
 		// Get initial latitude and longitude from the location returned by getLastKnownLocation()
-		initialLocation = locationManager.getLastKnownLocation(bestProvider);
-		latLong = new LatLng(initialLocation.getLatitude(), initialLocation.getLongitude());
+		//initialLocation = locationManager.getLastKnownLocation(bestProvider);
+		//latLong = new LatLng(initialLocation.getLatitude(), initialLocation.getLongitude());
 		
-		// Add a marker with this initial location
-		initialMarker = map.addMarker(new MarkerOptions ().position(latLong).title("I'm Here!"));
-		
-		/*
-		 * 
-		// Initialize text views to be used for the custom info window adapter
-		userActivityView = new TextView(MainActivity.this);
-		userLocationView = new TextView(MainActivity.this);
-		deviceOrientationView = new TextView(MainActivity.this);
-		longLatContainer = new LinearLayout(MainActivity.this);
-		accelDataContainer = new LinearLayout(MainActivity.this);
-		
-		latitudeView = new TextView(MainActivity.this);
-		longitudeView = new TextView(MainActivity.this);
-		xyzLabelView = new TextView(MainActivity.this);
-		xyzView = new TextView(MainActivity.this);
-		
-		longLatContainer.addView(latitudeView);
-		longLatContainer.addView(longitudeView);
-		
-		accelDataContainer.addView(xyzLabelView);
-		accelDataContainer.addView(xyzView);
-		
-		locationDataContainer = new LinearLayout(MainActivity.this);
-		locationDataContainer.setOrientation(LinearLayout.HORIZONTAL);
-		locationDataContainer.addView(longLatContainer);
-		locationDataContainer.addView(accelDataContainer);
-		
-		infoWindowLayout = new LinearLayout(MainActivity.this);
-		infoWindowLayout.addView(userActivityView);
-		infoWindowLayout.addView(userLocationView);
-		infoWindowLayout.addView(deviceOrientationView);
-		infoWindowLayout.addView(locationDataContainer);
-		
-		*/
+		// Use reverse-geocoding to retrieve the human readable address associated with a location
+		geocoder = new Geocoder(MainActivity.this, Locale.getDefault());
 	}
 
 	@Override
@@ -130,10 +118,79 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 	/********** LocationListener Methods **********/
 
 	@Override
-	public void onLocationChanged(Location arg0) {
-		// TODO Auto-generated method stub
-		this.latitude = arg0.getLatitude();
-		this.longitude = arg0.getLongitude();
+	public void onLocationChanged(final Location arg0) {	
+		try {
+			addresses = geocoder.getFromLocation(arg0.getLatitude(), arg0.getLongitude(), 1);
+		}
+		catch (IOException e) {
+			System.out.println("Could not find any addresses associated with the location <latitude=" + arg0.getLongitude() + ", longitude=" + arg0.getLongitude() + ">");
+		}
+
+		final ContentValues values = new ContentValues();
+		values.put(DatabaseHandler.getColumnNameAccelX(), accelX);
+		values.put(DatabaseHandler.getColumnNameAccelY(), accelY);
+		values.put(DatabaseHandler.getColumnNameAccelZ(), accelZ);
+		values.put(DatabaseHandler.getColumnNameOrientation(), getResources().getConfiguration().orientation);
+		values.put(DatabaseHandler.getColumnNameLatitude(), arg0.getLatitude());
+		values.put(DatabaseHandler.getColumnNameLongitude(), arg0.getLongitude());
+		
+		// Build address line
+		String address = "";
+		for (int i = 0; i <= 2; i++) {
+			if (addresses.get(0).getAddressLine(i) != null) {
+				address += addresses.get(0).getAddressLine(i) + " ";
+			}
+		}
+		values.put(DatabaseHandler.getColumnNameAddress(), address);
+		
+		// Create an alert dialog that will prompt the user to enter their activity
+		final AlertDialog.Builder userActivityPrompt = new AlertDialog.Builder(this);
+		userActivityPrompt.setTitle("What were you doing?");
+		
+		// Create an editable text field used to accept user input for their activity
+		final EditText userActivityText = new EditText(this);
+		userActivityPrompt.setView(userActivityText);
+		
+		// Register a listener for when users click the "OK" button on the dialog window
+		userActivityPrompt.setPositiveButton("OK", new DialogInterface.OnClickListener () {
+			
+			@Override
+			public void onClick(DialogInterface dialog, int which) {
+				values.put(DatabaseHandler.getColumnNameActivity(), userActivityText.getText().toString());
+				
+				// Insert record into the UserLocations table and return the ID
+				final long recordID = db.insert(DatabaseHandler.getTableName(), null, values);
+				
+				// Add the marker to the map
+				map.addMarker(new MarkerOptions ().position(
+						new LatLng(arg0.getLatitude(), arg0.getLongitude()))
+							.title(String.valueOf(recordID)));
+				dialog.dismiss();
+			}
+			
+		});
+		
+		// Register a listener for when users click the "Cancel" button on the dialog window
+		userActivityPrompt.setNegativeButton("Cancel", new DialogInterface.OnClickListener () {
+
+			@Override
+			public void onClick(DialogInterface dialog, int which) {
+				values.put(DatabaseHandler.getColumnNameActivity(), "");
+				
+				// Insert record into the UserLocations table and return the ID
+				final long recordID = db.insert(DatabaseHandler.getTableName(), null, values);
+				
+				// Add the marker to the map
+				map.addMarker(new MarkerOptions ().position(
+						new LatLng(arg0.getLatitude(), arg0.getLongitude()))
+							.title(String.valueOf(recordID)));
+				dialog.cancel();
+			}
+		});
+		
+		// Show the dialog prompt
+		userActivityPrompt.show();
+
 	}
 
 	@Override
@@ -154,24 +211,24 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 		
 	}
 
-	/********** LocationListener Methods **********/
+	/********** SensorListener Methods **********/
 	
 	@Override
 	public void onAccuracyChanged(Sensor arg0, int arg1) {
-		// TODO Auto-generated method stub
 		
 	}
 
 	@Override
 	public void onSensorChanged(final SensorEvent arg0) {
 		// TODO Auto-generated method stub
-		// Add to message queue
+		
+		// Add to the thread's message queue
 		locationHandler.post(new Runnable() {
 			public void run() {
 				if (arg0.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
-					x = arg0.values[0];
-					y = arg0.values[1];
-					z = arg0.values[2];
+					accelX = arg0.values[0];
+					accelY = arg0.values[1];
+					accelZ = arg0.values[2];
 				}
 			}
 		});
@@ -181,28 +238,20 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 	protected void onResume() {
 		// TODO Auto-generated method stub
 		super.onResume();
+		
+		// Register the sensor manager listener whenever the application is resumed - we don't want the
+		// sensor service to continue consuming unnecessary power while the application is not in use
 		sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
 	}
 
-	/********** InfoWindowAdapter Methods **********/
-	
-	/*
 	@Override
-	public View getInfoContents(Marker clickedMarker) {
+	protected void onDestroy() {
 		// TODO Auto-generated method stub
-		return null;
+		super.onDestroy();
+		
+		// Release the reference to the database object when the application is destroyed
+		if (db != null) {
+			db.close();
+		}
 	}
-
-	@Override
-	public View getInfoWindow(Marker clickedMarker) {
-		// TODO Auto-generated method stub
-		userActivityView.setText("Grabbing coffee w/ Chad");
-		userLocationView.setText("Location: " + "foo");
-		deviceOrientationView.setText("Dvice Orientation: " + "bar");
-		latitudeView.setText(Double.toString(latitude));
-		longitudeView.setText(Double.toString(longitude));
-		xyzView.setText("< X: " + Float.toString(x) + ", Y: " + Float.toString(y) + ", Z: " + Float.toHexString(z));
-		return infoWindowLayout;
-	}
-	*/
 }
